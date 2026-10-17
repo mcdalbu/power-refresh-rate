@@ -1,0 +1,11 @@
+{
+  "uuid": "power-refresh-rate@mcda.local",
+  "name": "Power Refresh Rate",
+  "description": "Ajusta a frequência do painel interno conforme o perfil de energia, preservando escala, resolução e VRR.",
+  "shell-version": [
+    "50"
+  ],
+  "settings-schema": "org.gnome.shell.extensions.power-refresh-rate",
+  "version": 1,
+  "url": "https://github.com/mcdalbu/power-refresh-rate"
+}

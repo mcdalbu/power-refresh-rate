@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.power-refresh-rate" path="/org/gnome/shell/extensions/power-refresh-rate/">
+    <key name="power-saver-hz" type="u"><default>60</default><range min="60" max="120"/><summary>Frequência no modo economia</summary></key>
+    <key name="balanced-hz" type="u"><default>120</default><range min="60" max="120"/><summary>Frequência no modo balanceado</summary></key>
+    <key name="performance-hz" type="u"><default>120</default><range min="60" max="120"/><summary>Frequência no modo desempenho</summary></key>
+    <key name="last-status" type="s"><default>'Aguardando ativação.'</default><summary>Estado atual da extensão</summary></key>
+    <key name="last-error" type="s"><default>''</default><summary>Diagnóstico da última falha</summary></key>
+  </schema>
+</schemalist>
