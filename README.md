@@ -116,6 +116,20 @@ e as bibliotecas do aplicativo Extensões instalados. A integração foi testada
 em GNOME Shell 50.5 e Mutter 50.6. A primeira versão foi validada com serviços
 simulados e uma sessão virtual; a validação no painel físico continua pendente.
 
+## Implantar os perfis de energia em outro Fedora
+
+O [guia de implantação](docs/fedora-energy/README.md) documenta a configuração
+complementar de PPD, Intel LPMD, EPP dinâmico por perfil e alimentação, limites
+de CPU e política da GPU Intel Xe. Inclui adaptação ao hardware, validação e
+reversão. As tabelas são personalizadas e não representam recomendações
+universais para qualquer processador.
+
+Os scripts, unidades systemd, testes e a extensão estão no
+[pacote de implantação](docs/implementacao-fedora.tar.gz), também disponível
+como arquivos em `docs/fedora-energy/`. Esses serviços são opcionais e
+instalados separadamente; instalar a extensão não instala os controladores
+nem altera os perfis do sistema.
+
 ## Desenvolvimento
 
 - `extension.js`: ciclo de vida da extensão.

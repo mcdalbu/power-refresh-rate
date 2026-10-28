@@ -1,0 +1,48 @@
+{
+  "power-saver": {
+    "battery": [
+      224,
+      160,
+      128,
+      192
+    ],
+    "ac": [
+      208,
+      96,
+      96,
+      160
+    ]
+  },
+  "balanced": {
+    "ac": [
+      192,
+      64,
+      64,
+      128
+    ],
+    "battery": [
+      208,
+      128,
+      96,
+      160
+    ]
+  },
+  "performance": {
+    "ac": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "battery": [
+      192,
+      96,
+      64,
+      128
+    ]
+  },
+  "performance_dynamic": {
+    "ac": false,
+    "battery": true
+  }
+}
