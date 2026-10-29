@@ -44,12 +44,18 @@ const all = widgets(window);
 const save = all.find(w => w.label === 'Aplicar ajustes');
 if (!save || !save.sensitive || !window._powerProfileDraft)
     throw new Error('System editor did not load');
-const eppRow = all.find(w => w instanceof Adw.SpinRow && w.title.includes('UTIL_IDLE'));
-const previousEpp = eppRow.value;
-eppRow.value = 224;
-if (eppRow.subtitle !== '224 · Maximum Savings')
-    throw new Error('EPP label did not update with the numeric editor');
-eppRow.value = previousEpp;
+const customEpp = all.find(w => w instanceof Adw.SpinRow && w.title === 'Custom EPP' && w.value === 208);
+customEpp.value = 209;
+if (!['power-saver', 'balanced', 'performance'].some(p => ['ac', 'battery'].some(s => window._powerProfileDraft.epp[p][s].includes(209))))
+    throw new Error('Custom EPP was rounded or lost');
+customEpp.value = 208;
+const eppRow = all.find(w => w instanceof Adw.ComboRow && w.title.includes('UTIL_IDLE') && w.selected < 9);
+const previousEpp = eppRow.selected;
+eppRow.selected = 0;
+eppRow.selected = 7;
+if (eppRow.model.get_string(eppRow.selected) !== '224 · Maximum Savings')
+    throw new Error('Named EPP selector did not show the value and label');
+eppRow.selected = previousEpp;
 save.emit('clicked');
 if (applyCalls !== 0)
     throw new Error('Unchanged settings requested authentication');

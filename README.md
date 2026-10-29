@@ -174,3 +174,6 @@ Performance, 64 Performance, 96 Responsive, 128 Balanced, 160 Efficient,
 192 Power Saving, 224 Maximum Savings e 255 Full Economy. Outros números
 continuam aceitos e aparecem como Custom value, sem arredondamento. Esses
 nomes são rótulos da interface; o kernel continua recebendo o EPP numérico.
+
+Os estados EPP agora usam um seletor com número e nome na opção selecionada.
+Escolha Custom value… para editar qualquer inteiro sem arredondamento.

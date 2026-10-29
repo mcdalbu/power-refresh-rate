@@ -56,6 +56,44 @@ function spin(title, value, upper, subtitle = '', step = 1) {
             page_increment: step * 5, value})});
 }
 
+function eppEditor(title, initial, changed) {
+    const values = [...EPP_LABELS.keys()];
+    const row = new Adw.ComboRow({title,
+        model: Gtk.StringList.new([...values.map(eppDescription), 'Custom value…']),
+        subtitle: 'EPP de 0 a 255; valores maiores favorecem eficiência.'});
+    const custom = spin('Custom EPP', initial, 255, eppDescription(initial));
+    let updating = false;
+    const setValue = (value, notify = true) => {
+        updating = true;
+        const index = values.indexOf(value);
+        row.selected = index < 0 ? values.length : index;
+        custom.value = value;
+        custom.subtitle = eppDescription(value);
+        custom.visible = index < 0;
+        updating = false;
+        if (notify)
+            changed(value);
+    };
+    row.connect('notify::selected', () => {
+        if (updating)
+            return;
+        if (row.selected === values.length) {
+            custom.visible = true;
+        } else {
+            setValue(values[row.selected]);
+        }
+    });
+    custom.connect('notify::value', () => {
+        if (!updating)
+            setValue(Math.round(custom.value));
+    });
+    setValue(initial, false);
+    return {row, custom, setValue, setSensitive(sensitive) {
+        row.sensitive = sensitive;
+        custom.sensitive = sensitive;
+    }};
+}
+
 export default class PowerRefreshPreferences extends ExtensionPreferences {
     _loadSystemConfiguration() {
         if (!GLib.file_test(HELPER, GLib.FileTest.IS_EXECUTABLE))
@@ -195,14 +233,11 @@ export default class PowerRefreshPreferences extends ExtensionPreferences {
                 }
                 const values = draft.epp[profile][source];
                 for (let index = 0; index < 4; index++) {
-                    const row = spin(EPP_NAMES[index], values[index], 255, eppDescription(values[index]));
-                    row.sensitive = !dynamic || dynamic.active;
-                    row.connect('notify::value', () => {
-                        values[index] = Math.round(row.value);
-                        row.subtitle = eppDescription(values[index]);
-                    });
-                    system.add(row);
-                    eppRows.push(row);
+                    const editor = eppEditor(EPP_NAMES[index], values[index], value => {values[index] = value;});
+                    editor.setSensitive(!dynamic || dynamic.active);
+                    system.add(editor.row);
+                    system.add(editor.custom);
+                    eppRows.push(editor);
                 }
                 let dynamicValues = values.some(value => value !== 0) ? [...values] : [192, 96, 64, 128];
                 dynamic?.connect('notify::active', () => {
@@ -210,17 +245,17 @@ export default class PowerRefreshPreferences extends ExtensionPreferences {
                     if (dynamic.active) {
                         for (let i = 0; i < 4; i++) {
                             values[i] = dynamicValues[i];
-                            eppRows[i].value = dynamicValues[i];
+                            eppRows[i].setValue(dynamicValues[i]);
                         }
                     } else {
                         dynamicValues = [...values];
                         for (let i = 0; i < 4; i++) {
                             values[i] = 0;
-                            eppRows[i].value = 0;
+                            eppRows[i].setValue(0);
                         }
                     }
-                    for (const row of eppRows)
-                        row.sensitive = dynamic.active;
+                    for (const editor of eppRows)
+                        editor.setSensitive(dynamic.active);
                 });
             }
         }
