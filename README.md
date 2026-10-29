@@ -166,3 +166,11 @@ gerenciar a implantação; instalar somente o ZIP não instala os controladores.
 Captura em uma sessão GNOME isolada; os valores iniciais seguem a implantação
 de referência. Cada máquina continua exigindo a validação do hardware descrita
 no guia.
+
+### Nomes dos valores EPP
+
+O editor mostra nomes ao lado dos números: 0 Maximum Performance, 32 High
+Performance, 64 Performance, 96 Responsive, 128 Balanced, 160 Efficient,
+192 Power Saving, 224 Maximum Savings e 255 Full Economy. Outros números
+continuam aceitos e aparecem como Custom value, sem arredondamento. Esses
+nomes são rótulos da interface; o kernel continua recebendo o EPP numérico.

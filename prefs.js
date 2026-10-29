@@ -8,6 +8,16 @@ const PROFILES = [['power-saver', 'Economia'], ['balanced', 'Balanceado'], ['per
 const SOURCES = [['ac', 'Na tomada'], ['battery', 'Na bateria']];
 const EPP_NAMES = ['Atividade leve · UTIL_IDLE', 'Carga sustentada · SUSTAIN',
     'Rajadas curtas · BURSTY', 'Atividade gráfica · GFX_BUSY'];
+const EPP_LABELS = new Map([
+    [0, 'Maximum Performance'], [32, 'High Performance'], [64, 'Performance'],
+    [96, 'Responsive'], [128, 'Balanced'], [160, 'Efficient'],
+    [192, 'Power Saving'], [224, 'Maximum Savings'], [255, 'Full Economy'],
+]);
+
+export function eppDescription(value) {
+    return `${value} · ${EPP_LABELS.get(value) ?? 'Custom value'}`;
+}
+
 const HELPER = '/usr/local/libexec/power-profile-settings-helper';
 
 function readJson(path) {
@@ -185,9 +195,12 @@ export default class PowerRefreshPreferences extends ExtensionPreferences {
                 }
                 const values = draft.epp[profile][source];
                 for (let index = 0; index < 4; index++) {
-                    const row = spin(EPP_NAMES[index], values[index], 255, 'EPP de 0 a 255; selecionado pelo estado de carga do LPMD.');
+                    const row = spin(EPP_NAMES[index], values[index], 255, eppDescription(values[index]));
                     row.sensitive = !dynamic || dynamic.active;
-                    row.connect('notify::value', () => {values[index] = Math.round(row.value);});
+                    row.connect('notify::value', () => {
+                        values[index] = Math.round(row.value);
+                        row.subtitle = eppDescription(values[index]);
+                    });
                     system.add(row);
                     eppRows.push(row);
                 }

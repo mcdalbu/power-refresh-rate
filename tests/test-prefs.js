@@ -4,7 +4,13 @@ import Gtk from 'gi://Gtk';
 import GLib from 'gi://GLib';
 
 Gio.Resource.load('/usr/share/gnome-shell/org.gnome.Shell.Extensions.src.gresource')._register();
-const {default: Preferences} = await import('../prefs.js');
+const {default: Preferences, eppDescription} = await import('../prefs.js');
+for (const [value, name] of [[0, 'Maximum Performance'], [32, 'High Performance'],
+    [64, 'Performance'], [96, 'Responsive'], [128, 'Balanced'], [160, 'Efficient'],
+    [192, 'Power Saving'], [224, 'Maximum Savings'], [255, 'Full Economy'], [208, 'Custom value']]) {
+    if (eppDescription(value) !== `${value} · ${name}`)
+        throw new Error(`Incorrect EPP label for ${value}`);
+}
 const extensionDir = Gio.File.new_for_uri(import.meta.url).get_parent().get_parent();
 const metadata = JSON.parse(new TextDecoder().decode(extensionDir.get_child('metadata.json').load_contents(null)[1]));
 metadata.path = extensionDir.get_path();
@@ -38,6 +44,12 @@ const all = widgets(window);
 const save = all.find(w => w.label === 'Aplicar ajustes');
 if (!save || !save.sensitive || !window._powerProfileDraft)
     throw new Error('System editor did not load');
+const eppRow = all.find(w => w instanceof Adw.SpinRow && w.title.includes('UTIL_IDLE'));
+const previousEpp = eppRow.value;
+eppRow.value = 224;
+if (eppRow.subtitle !== '224 · Maximum Savings')
+    throw new Error('EPP label did not update with the numeric editor');
+eppRow.value = previousEpp;
 save.emit('clicked');
 if (applyCalls !== 0)
     throw new Error('Unchanged settings requested authentication');
