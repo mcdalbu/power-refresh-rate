@@ -1,5 +1,6 @@
 import Gio from 'gi://Gio';
 import Adw from 'gi://Adw';
+import Gtk from 'gi://Gtk';
 import GLib from 'gi://GLib';
 
 Gio.Resource.load('/usr/share/gnome-shell/org.gnome.Shell.Extensions.src.gresource')._register();
@@ -9,14 +10,63 @@ const metadata = JSON.parse(new TextDecoder().decode(extensionDir.get_child('met
 metadata.path = extensionDir.get_path();
 metadata.dir = extensionDir;
 Adw.init();
-const preferences = new Preferences(metadata);
+let applied;
+let applyCalls = 0;
+class TestPreferences extends Preferences {
+    _loadSystemConfiguration() {
+        const load = name => JSON.parse(new TextDecoder().decode(extensionDir.get_child(`system/${name}`).load_contents(null)[1]));
+        return {version: 1, epp: load('epp-defaults.json'), hardware: load('hardware-defaults.json')};
+    }
+    async _applySystem(draft) {
+        applyCalls++;
+        applied = JSON.parse(JSON.stringify(draft));
+        return {changed: true};
+    }
+}
+const preferences = new TestPreferences(metadata);
 const window = new Adw.PreferencesWindow();
 preferences.fillPreferencesWindow(window);
 window.present();
-const loop = new GLib.MainLoop(null, false);
-GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
-    window.close();
-    loop.quit();
+window.set_visible_page_name('balanced');
+function widgets(root) {
+    const output = [root];
+    for (let child = root.get_first_child(); child; child = child.get_next_sibling())
+        output.push(...widgets(child));
+    return output;
+}
+const all = widgets(window);
+const save = all.find(w => w.label === 'Aplicar ajustes');
+if (!save || !save.sensitive || !window._powerProfileDraft)
+    throw new Error('System editor did not load');
+save.emit('clicked');
+if (applyCalls !== 0)
+    throw new Error('Unchanged settings requested authentication');
+// Changing a workload value must reach the single explicit save operation.
+window._powerProfileDraft.epp.balanced.battery[0] = 209;
+GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+    save.emit('clicked');
     return GLib.SOURCE_REMOVE;
 });
-loop.run();
+await new Promise(resolve => GLib.timeout_add(GLib.PRIORITY_DEFAULT, 700, () => {
+    resolve();
+    return GLib.SOURCE_REMOVE;
+}));
+if (!save.sensitive)
+    throw new Error('Apply did not finish or editors stayed disabled');
+if (applied?.epp.balanced.battery[0] !== 209)
+    throw new Error('Preferences did not apply the edited configuration');
+if (applyCalls !== 1)
+    throw new Error('Apply called more than once');
+preferences._applySystem = async () => { throw new Error('Authentication cancelled'); };
+window._powerProfileDraft.epp.balanced.battery[0] = 210;
+save.emit('clicked');
+await new Promise(resolve => GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => { resolve(); return GLib.SOURCE_REMOVE; }));
+if (!save.sensitive || applyCalls !== 1)
+    throw new Error('Cancelled authentication did not recover safely');
+print('System editor: explicit save, no-op, workload payload and cancelled-auth recovery verified');
+const snapshot = new Gtk.Snapshot();
+Gtk.WidgetPaintable.new(window).snapshot(snapshot, window.get_width(), window.get_height());
+const node = snapshot.to_node();
+if (node)
+    window.get_renderer().render_texture(node, null).save_to_png('/tmp/power-profiles-preferences.png');
+window.close();

@@ -13,6 +13,7 @@ const external = ['DP-1', 'DEL', 'external', 'external'];
 const lease = ['DP-2', 'DEL', 'leased', 'leased'];
 let mode = 120;
 let profile = 'balanced';
+let onBattery = false;
 let hasScale = true;
 let serial = 1;
 const applied = [];
@@ -82,10 +83,14 @@ const display = Gio.DBusExportedObject.wrapJSObject(displayXML, {
 const power = Gio.DBusExportedObject.wrapJSObject(powerXML, {
     get ActiveProfile() { return profile; },
 });
+const upower = Gio.DBusExportedObject.wrapJSObject('<node><interface name="org.freedesktop.UPower"><property name="OnBattery" type="b" access="read"/></interface></node>', {
+    get OnBattery() { return onBattery; },
+});
 const connection = Gio.DBus.session;
+upower.export(connection, '/org/freedesktop/UPower');
 display.export(connection, '/org/gnome/Mutter/DisplayConfig');
 power.export(connection, '/org/freedesktop/UPower/PowerProfiles');
-for (const name of ['org.gnome.Mutter.DisplayConfig', 'org.freedesktop.UPower.PowerProfiles']) {
+for (const name of ['org.gnome.Mutter.DisplayConfig', 'org.freedesktop.UPower.PowerProfiles', 'org.freedesktop.UPower']) {
     connection.call_sync('org.freedesktop.DBus', '/org/freedesktop/DBus',
         'org.freedesktop.DBus', 'RequestName', V('(su)', [name, 0]),
         null, Gio.DBusCallFlags.NONE, 2000, null);
@@ -143,6 +148,18 @@ try {
     await until(() => mode === 60, 'Settings change');
     settings.set_uint('performance-hz', 120);
     await until(() => mode === 120, 'Settings restore');
+    settings.set_uint('performance-ac-hz', 120);
+    settings.set_uint('performance-battery-hz', 60);
+    settings.set_boolean('separate-refresh-by-power-source', true);
+    onBattery = true;
+    upower.emit_property_changed('OnBattery', V('b', true));
+    upower.flush();
+    await until(() => mode === 60, 'Battery refresh without changing profile');
+    onBattery = false;
+    upower.emit_property_changed('OnBattery', V('b', false));
+    upower.flush();
+    await until(() => mode === 120, 'AC refresh without changing profile');
+    print('Separate AC/battery refresh and source-change events: OK');
     const beforeDisable = applied.length;
     setProfile('power-saver');
     controller.stop();
@@ -155,4 +172,5 @@ try {
     controller?.stop();
     display.unexport();
     power.unexport();
+    upower.unexport();
 }

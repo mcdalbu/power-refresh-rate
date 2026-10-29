@@ -66,7 +66,7 @@ export class RefreshController {
         this._cancellable = new Gio.Cancellable();
         this._status('Iniciando…');
         this._connect(this._settings, 'changed', (_settings, key) => {
-            if (Object.values(PROFILE_KEYS).includes(key))
+            if (key.endsWith('-hz') || key === 'separate-refresh-by-power-source')
                 this._queue();
         });
         this._initialize().catch(error => {
@@ -76,14 +76,16 @@ export class RefreshController {
     }
 
     async _initialize() {
-        const [display, power] = await Promise.all([
+        const [display, power, upower] = await Promise.all([
             proxyFor(Gio.BusType.SESSION, DISPLAY, '/org/gnome/Mutter/DisplayConfig', this._cancellable),
             proxyFor(this._powerBus, POWER, '/org/freedesktop/UPower/PowerProfiles', this._cancellable),
+            proxyFor(this._powerBus, 'org.freedesktop.UPower', '/org/freedesktop/UPower', this._cancellable),
         ]);
         if (!this._running)
             return;
         this._display = display;
         this._power = power;
+        this._upower = upower;
         this._connect(display, 'g-signal', (_p, _sender, signal) => {
             if (signal === 'MonitorsChanged')
                 this._queue();
@@ -97,7 +99,11 @@ export class RefreshController {
             if ('ActiveProfile' in changed.deep_unpack() || invalidated.includes('ActiveProfile'))
                 this._queue();
         });
-        for (const proxy of [display, power])
+        this._connect(upower, 'g-properties-changed', (_p, changed, invalidated) => {
+            if ('OnBattery' in changed.deep_unpack() || invalidated.includes('OnBattery'))
+                this._queue();
+        });
+        for (const proxy of [display, power, upower])
             this._connect(proxy, 'notify::g-name-owner', () => this._queue());
         this._queue();
         console.info('[Power Refresh Rate] Extensão iniciada; controle por sinais D-Bus.');
@@ -136,6 +142,16 @@ export class RefreshController {
         return this._power.get_cached_property('ActiveProfile')?.deep_unpack();
     }
 
+    _target(profile) {
+        if (!this._settings.get_boolean('separate-refresh-by-power-source'))
+            return this._settings.get_uint(PROFILE_KEYS[profile]);
+        const battery = this._upower.get_cached_property('OnBattery');
+        if (!this._upower.get_name_owner() || battery === null)
+            throw new Error('Aguardando UPower para selecionar a frequência por alimentação.');
+        const source = battery.deep_unpack() ? 'battery' : 'ac';
+        return this._settings.get_uint(`${profile}-${source}-hz`);
+    }
+
     async _reconcile() {
         this._busy = true;
         try {
@@ -153,14 +169,14 @@ export class RefreshController {
             const key = PROFILE_KEYS[profile];
             if (!key)
                 throw new Error(`Perfil de energia indisponível ou desconhecido: ${profile}`);
-            const target = this._settings.get_uint(key);
+            const target = this._target(profile);
             const state = await call(this._display, 'GetCurrentState', null, this._cancellable);
             if (!this._running)
                 return;
             const config = buildConfiguration(state.recursiveUnpack(), target);
             if (config.changes.length) {
                 await call(this._display, 'ApplyMonitorsConfig', parameters(config, 0), this._cancellable);
-                if (!this._running || profile !== this._profile()) {
+                if (!this._running || profile !== this._profile() || target !== this._target(profile)) {
                     this._again = this._running;
                     return;
                 }
@@ -212,6 +228,7 @@ export class RefreshController {
         this._connections = [];
         this._status('Desativada.');
         this._power = null;
+        this._upower = null;
         this._display = null;
         this._again = false;
     }

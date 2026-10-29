@@ -6,5 +6,12 @@
     <key name="performance-hz" type="u"><default>120</default><range min="60" max="120"/><summary>Frequência no modo desempenho</summary></key>
     <key name="last-status" type="s"><default>'Aguardando ativação.'</default><summary>Estado atual da extensão</summary></key>
     <key name="last-error" type="s"><default>''</default><summary>Diagnóstico da última falha</summary></key>
+    <key name="separate-refresh-by-power-source" type="b"><default>false</default><summary>Separar frequência por alimentação</summary></key>
+    <key name="power-saver-ac-hz" type="u"><default>60</default><range min="60" max="120"/><summary>Frequência power-saver ac</summary></key>
+    <key name="power-saver-battery-hz" type="u"><default>60</default><range min="60" max="120"/><summary>Frequência power-saver battery</summary></key>
+    <key name="balanced-ac-hz" type="u"><default>120</default><range min="60" max="120"/><summary>Frequência balanced ac</summary></key>
+    <key name="balanced-battery-hz" type="u"><default>120</default><range min="60" max="120"/><summary>Frequência balanced battery</summary></key>
+    <key name="performance-ac-hz" type="u"><default>120</default><range min="60" max="120"/><summary>Frequência performance ac</summary></key>
+    <key name="performance-battery-hz" type="u"><default>120</default><range min="60" max="120"/><summary>Frequência performance battery</summary></key>
   </schema>
 </schemalist>

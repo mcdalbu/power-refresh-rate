@@ -1,11 +1,11 @@
 {
   "uuid": "power-refresh-rate@mcda.local",
-  "name": "Power Refresh Rate",
-  "description": "Ajusta a frequência do painel interno conforme o perfil de energia, preservando escala, resolução e VRR.",
+  "name": "Power Profiles & Refresh Rate",
+  "description": "Configura EPP, limites de CPU, GPU e frequ\u00eancia da tela por perfil de energia e alimenta\u00e7\u00e3o, com complemento de sistema opcional.",
   "shell-version": [
     "50"
   ],
   "settings-schema": "org.gnome.shell.extensions.power-refresh-rate",
-  "version": 1,
+  "version": 2,
   "url": "https://github.com/mcdalbu/power-refresh-rate"
 }

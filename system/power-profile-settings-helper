@@ -1,0 +1,139 @@
+#!/usr/bin/python3 -I
+"""Validate and atomically apply only the two power-profile configuration files."""
+from pathlib import Path
+import fcntl
+import json
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
+
+EPP = Path('/etc/power-profile-lpmd/config.json')
+HARDWARE = Path('/etc/power-profile-cpu-cap/config.json')
+PROFILES = ('power-saver', 'balanced', 'performance')
+SOURCES = ('ac', 'battery')
+SERVICES = ('power-profile-lpmd.service', 'power-profile-cpu-cap.service')
+
+
+def keys(value, expected):
+    if not isinstance(value, dict) or set(value) != set(expected):
+        raise ValueError('Unexpected or missing configuration fields')
+
+
+def integer(value, low, high):
+    if type(value) is not int or not low <= value <= high:
+        raise ValueError(f'Expected an integer in {low}..{high}')
+
+
+def validate(data, limits=None):
+    keys(data, ('version', 'epp', 'hardware'))
+    integer(data['version'], 1, 1)
+    epp, hardware = data['epp'], data['hardware']
+    keys(epp, (*PROFILES, 'performance_dynamic'))
+    keys(epp['performance_dynamic'], SOURCES)
+    for value in epp['performance_dynamic'].values():
+        if type(value) is not bool:
+            raise ValueError('Dynamic EPP must be boolean')
+    keys(hardware, PROFILES)
+    for profile in PROFILES:
+        keys(epp[profile], SOURCES)
+        keys(hardware[profile], SOURCES)
+        for source in SOURCES:
+            values = epp[profile][source]
+            if not isinstance(values, list) or len(values) != 4:
+                raise ValueError('Four workload EPP values are required')
+            for value in values:
+                integer(value, 0, 255)
+            if profile == 'performance' and not epp['performance_dynamic'][source] and values != [0, 0, 0, 0]:
+                raise ValueError('Fixed Performance must use EPP 0')
+            entry = hardware[profile][source]
+            keys(entry, ('p_max_mhz', 'e_max_mhz', 'gpu'))
+            for key in ('p_max_mhz', 'e_max_mhz'):
+                integer(entry[key], 0, 10000)
+                if entry[key] and limits:
+                    low, high = limits[key]
+                    if not low <= entry[key] <= high:
+                        raise ValueError(f'{key} must be 0 (hardware maximum) or {low}..{high} MHz')
+            if entry['gpu'] not in ('base', 'power_saving'):
+                raise ValueError('Unsupported GPU policy')
+    return data
+
+
+def hardware_limits():
+    # Read topology from the same PMU lists used by the CPU controller.
+    import importlib.util
+    spec = importlib.util.spec_from_file_location('cpu_caps', '/usr/local/libexec/power-profile-cpu-cap.py')
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    p, e = mod.CpuLimits().types()
+    result = {}
+    for key, cpus in (('p_max_mhz', p), ('e_max_mhz', e)):
+        policies = [Path('/sys/devices/system/cpu/cpufreq') / f'policy{cpu}' for cpu in cpus]
+        result[key] = (max(int((v/'scaling_min_freq').read_text()) // 1000 for v in policies),
+                       max(int((v/'cpuinfo_max_freq').read_text()) // 1000 for v in policies))
+    return result
+
+
+def atomic_write(path, content):
+    fd, name = tempfile.mkstemp(prefix='.power-settings-', dir=path.parent)
+    os.close(fd)
+    temporary = Path(name)
+    try:
+        shutil.copy2(path, temporary)
+        temporary.write_bytes(content)
+        with temporary.open('rb') as stream:
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def apply(data):
+    validate(data, hardware_limits())
+    # Both files are fixed root-owned targets; callers cannot choose any path,
+    # command, service, template or executable. Keep a backup for each apply.
+    for path in (EPP, HARDWARE):
+        if path.is_symlink() or path.stat().st_uid != 0 or path.stat().st_mode & 0o022:
+            raise ValueError('Configuration must be a root-owned regular file')
+    previous = {path: path.read_bytes() for path in (EPP, HARDWARE)}
+    candidate = {EPP: data['epp'], HARDWARE: data['hardware']}
+    if all(json.loads(previous[p]) == candidate[p] for p in previous):
+        return {'changed': False}
+    backup = Path('/var/backups/energy-trial') / f'preferences-{time.time_ns()}'
+    backup.mkdir(parents=True, mode=0o700)
+    for path in previous:
+        shutil.copy2(path, backup / ('epp.json' if path == EPP else 'hardware.json'))
+    try:
+        for path, value in candidate.items():
+            atomic_write(path, (json.dumps(value, indent=2) + '\n').encode())
+        subprocess.run(['/usr/bin/systemctl', 'restart', *SERVICES], check=True, timeout=50)
+        subprocess.run(['/usr/bin/systemctl', 'is-active', '--quiet', *SERVICES], check=True, timeout=10)
+    except BaseException:
+        for path, content in previous.items():
+            atomic_write(path, content)
+        subprocess.run(['/usr/bin/systemctl', 'restart', *SERVICES], check=False, timeout=50)
+        raise
+    return {'changed': True, 'backup': str(backup)}
+
+
+def main():
+    if os.geteuid() != 0 or len(sys.argv) != 1:
+        raise ValueError('Use the administrator helper without command-line arguments')
+    raw = sys.stdin.buffer.read(65537)
+    if len(raw) > 65536:
+        raise ValueError('Configuration request is too large')
+    data = json.loads(raw)
+    with open('/run/power-profile-settings.lock', 'w') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        result = apply(data)
+    print(json.dumps(result))
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except Exception as error:
+        print(str(error), file=sys.stderr)
+        sys.exit(1)

@@ -1,0 +1,38 @@
+{
+  "power-saver": {
+    "ac": {
+      "p_max_mhz": 3000,
+      "e_max_mhz": 2000,
+      "gpu": "base"
+    },
+    "battery": {
+      "p_max_mhz": 3000,
+      "e_max_mhz": 2000,
+      "gpu": "power_saving"
+    }
+  },
+  "balanced": {
+    "ac": {
+      "p_max_mhz": 0,
+      "e_max_mhz": 0,
+      "gpu": "base"
+    },
+    "battery": {
+      "p_max_mhz": 0,
+      "e_max_mhz": 0,
+      "gpu": "power_saving"
+    }
+  },
+  "performance": {
+    "ac": {
+      "p_max_mhz": 0,
+      "e_max_mhz": 0,
+      "gpu": "base"
+    },
+    "battery": {
+      "p_max_mhz": 0,
+      "e_max_mhz": 0,
+      "gpu": "base"
+    }
+  }
+}

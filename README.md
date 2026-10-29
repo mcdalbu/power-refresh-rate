@@ -1,7 +1,8 @@
-# Power Refresh Rate
+# Power Profiles & Refresh Rate
 
-Extensão para GNOME Shell 50 que ajusta a frequência do painel interno conforme
-o perfil de energia selecionado no GNOME.
+Extensão para GNOME Shell 50 com um editor de perfis de energia e controle
+da frequência do painel interno. Cada perfil tem ajustes separados para
+tomada e bateria.
 
 | Perfil | Frequência padrão |
 | --- | --- |
@@ -9,7 +10,7 @@ o perfil de energia selecionado no GNOME.
 | Balanceado | 120 Hz |
 | Desempenho | 120 Hz |
 
-As preferências permitem escolher 60 ou 120 Hz para cada perfil. A extensão
+As preferências permitem escolher 60 ou 120 Hz para cada perfil e alimentação. A extensão
 preserva a resolução, a escala, o VRR, a posição dos monitores e a configuração
 dos monitores externos. Usa sinais D-Bus e dispensa um serviço Python permanente.
 
@@ -22,10 +23,17 @@ dos monitores externos. Usa sinais D-Bus e dispensa um serviço Python permanent
   em uso. Outros alvos não são configuráveis nesta versão.
 - A escala atual deve ser aceita pelo Mutter nos modos selecionados.
 
-A extensão acompanha o perfil ativo. Ela não configura PPD, TuneD, LPMD, EPP
-ou o turbo do processador.
+A extensão acompanha o perfil ativo. Sem complemento de sistema, controla
+somente a tela. Com o [complemento opcional](system/README.md), as preferências
+editam os quatro EPP, limites P/E e política GPU por perfil e alimentação,
+além do EPP dinâmico/fixo no Desempenho. Alterações de sistema exigem o botão
+Aplicar e autenticação administrativa. O turbo permanece permitido.
 
 ## Instalação
+
+A versão 0.2 inclui o editor de perfis. O ZIP mantém o UUID anterior para
+preservar as preferências da versão 0.1. O complemento de sistema é distribuído
+separadamente no arquivo `power-profile-settings-backend.tar.gz` da release.
 
 Baixe o arquivo `.shell-extension.zip` da página de
 [releases](https://github.com/mcdalbu/power-refresh-rate/releases) e instale:
@@ -56,6 +64,18 @@ make install
 ```
 
 O pacote é gerado em `dist/`. O UUID é `power-refresh-rate@mcda.local`.
+
+## Editor de perfis
+
+Abra as preferências e escolha Economia, Balanceado ou Desempenho. Cada página
+tem seções para tomada/bateria. A tela é salva imediatamente. Para EPP/CPU/GPU,
+revise as alterações e use **Aplicar ajustes** na página Geral. O valor 0 MHz
+significa máximo do hardware. Os valores atuais são preservados na instalação.
+
+O complemento exige a implantação PPD/LPMD existente; veja
+[instalação, permissões e reversão](system/README.md). Instalar o ZIP sozinho
+não instala serviços de root. Após atualizar uma extensão já carregada, saia
+e entre na sessão para carregar seu novo código.
 
 ## Comportamento
 
@@ -127,8 +147,8 @@ universais para qualquer processador.
 Os scripts, unidades systemd, testes e a extensão estão no
 [pacote de implantação](docs/implementacao-fedora.tar.gz), também disponível
 como arquivos em `docs/fedora-energy/`. Esses serviços são opcionais e
-instalados separadamente; instalar a extensão não instala os controladores
-nem altera os perfis do sistema.
+instalados separadamente. O novo editor usa o complemento de `system/` para
+gerenciar a implantação; instalar somente o ZIP não instala os controladores.
 
 ## Desenvolvimento
 
@@ -138,3 +158,11 @@ nem altera os perfis do sistema.
 - `prefs.js`: frequências por perfil e diagnóstico.
 - `schemas/`: configurações GSettings.
 - `tests/`: política, controlador e integração em sessão virtual.
+
+## Janela de preferências
+
+![Editor por perfil e alimentação](docs/screenshots/power-profile-controls.png)
+
+Captura em uma sessão GNOME isolada; os valores iniciais seguem a implantação
+de referência. Cada máquina continua exigindo a validação do hardware descrita
+no guia.

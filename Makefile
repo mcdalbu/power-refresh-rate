@@ -1,6 +1,6 @@
 UUID := power-refresh-rate@mcda.local
 
-.PHONY: build test test-shell install
+.PHONY: build test test-system test-shell install
 
 build:
 	mkdir -p dist
@@ -9,6 +9,9 @@ build:
 test:
 	glib-compile-schemas --strict schemas
 	GSETTINGS_BACKEND=memory dbus-run-session --config-file=tests/private-bus.conf -- gjs -m tests/test-controller.js
+
+test-system:
+	/usr/bin/python3 -m unittest discover -s system -p 'test_*.py'
 
 test-shell:
 	glib-compile-schemas --strict schemas

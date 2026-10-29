@@ -1,0 +1,27 @@
+[Unit]
+Description=CPU frequency caps and Intel Xe GPU policy by power profile
+Wants=power-profiles-daemon.service upower.service
+# PPD starts after multi-user.target on Fedora. Waiting for PPD here would
+# create a cycle because this unit is itself pulled in by multi-user.target.
+# The watcher handles a missing PPD bus owner and reconciles when it appears.
+After=dbus.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 -I /usr/local/libexec/power-profile-cpu-cap.py --max-khz 3000000 --efficiency-max-khz 2000000 --xe-gpu-policy --settings-file /etc/power-profile-cpu-cap/config.json
+ExecStopPost=/usr/bin/python3 -I /usr/local/libexec/power-profile-cpu-cap.py --restore --xe-gpu-policy
+Restart=on-failure
+RestartSec=2
+TimeoutStopSec=10
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ReadWritePaths=/sys/devices/system/cpu/cpufreq
+ReadWritePaths=-/sys/devices/pci0000:00/0000:00:02.0/tile0/gt0/freq0/power_profile
+ReadWritePaths=-/sys/devices/pci0000:00/0000:00:02.0/tile0/gt1/freq0/power_profile
+RestrictAddressFamilies=AF_UNIX
+
+[Install]
+WantedBy=multi-user.target
