@@ -1,11 +1,12 @@
 {
   "uuid": "power-refresh-rate@mcda.local",
   "name": "Power Profiles & Refresh Rate",
-  "description": "Configura EPP, limites de CPU, GPU e frequ\u00eancia da tela por perfil de energia e alimenta\u00e7\u00e3o, com complemento de sistema opcional.",
+  "description": "Configura EPP, limites de CPU, GPU e frequência da tela por perfil de energia e alimentação, com complemento de sistema opcional.",
   "shell-version": [
-    "50"
+    "50",
+    "51"
   ],
   "settings-schema": "org.gnome.shell.extensions.power-refresh-rate",
-  "version": 4,
+  "version": 6,
   "url": "https://github.com/mcdalbu/power-refresh-rate"
 }

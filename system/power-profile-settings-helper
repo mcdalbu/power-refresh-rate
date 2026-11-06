@@ -49,7 +49,10 @@ def validate(data, limits=None):
             if profile == 'performance' and not epp['performance_dynamic'][source] and values != [0, 0, 0, 0]:
                 raise ValueError('Fixed Performance must use EPP 0')
             entry = hardware[profile][source]
-            keys(entry, ('p_max_mhz', 'e_max_mhz', 'gpu'))
+            keys(entry, ('p_max_mhz', 'e_max_mhz', 'gpu', *(['park_p_cores'] if 'park_p_cores' in entry else [])))
+            park = entry.get('park_p_cores', False)
+            if type(park) is not bool or (park and profile != 'power-saver'):
+                raise ValueError('P-core parking must be boolean and is only available in Economy')
             for key in ('p_max_mhz', 'e_max_mhz'):
                 integer(entry[key], 0, 10000)
                 if entry[key] and limits:

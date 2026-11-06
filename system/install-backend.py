@@ -2,7 +2,7 @@
 """Upgrade an existing PPD/LPMD deployment with the validated preferences helper."""
 from pathlib import Path
 from datetime import datetime,timezone
-import copy,hashlib,json,os,shutil,subprocess,tempfile,time
+import copy,hashlib,importlib.util,json,os,shutil,subprocess,tempfile,time
 ROOT=Path(__file__).resolve().parent
 SCRIPT=Path('/usr/local/libexec/power-profile-cpu-cap.py')
 UNIT=Path('/etc/systemd/system/power-profile-cpu-cap.service')
@@ -37,6 +37,10 @@ def main():
  assert '--settings-file' not in unit
  unit=unit.replace(' --xe-gpu-policy\n',' --xe-gpu-policy --settings-file /etc/power-profile-cpu-cap/config.json\n',1)
  assert '--settings-file' in unit
+ spec=importlib.util.spec_from_file_location('cpu_backend',ROOT/SCRIPT.name)
+ module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+ p,_e=module.CpuLimits().types()
+ unit=module.parking_unit(unit,p)
  # The initial hardware policy exactly preserves the existing 3/2 GHz caps
  # in Economy and GPU behavior; the existing EPP JSON is left untouched.
  try:

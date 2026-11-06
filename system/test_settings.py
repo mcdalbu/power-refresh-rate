@@ -22,6 +22,15 @@ class SettingsTests(unittest.TestCase):
  def test_fixed_performance_cannot_hide_nonzero_epp(self):
   self.data['epp']['performance']['ac'][0]=128
   with self.assertRaises(ValueError):m.validate(self.data)
+ def test_parking_requires_boolean_and_economy(self):
+  self.data['hardware']['power-saver']['battery']['park_p_cores']=True
+  m.validate(self.data)
+  for value in (1,'true',None):
+   bad=copy.deepcopy(self.data);bad['hardware']['power-saver']['battery']['park_p_cores']=value
+   with self.assertRaises(ValueError):m.validate(bad)
+  for profile in ('balanced','performance'):
+   bad=copy.deepcopy(self.data);bad['hardware'][profile]['ac']['park_p_cores']=True
+   with self.assertRaises(ValueError):m.validate(bad)
  def test_restart_failure_rolls_back_both_files(self):
   epp,hw=Mock(),Mock()
   for p,kind in ((epp,'epp'),(hw,'hardware')):

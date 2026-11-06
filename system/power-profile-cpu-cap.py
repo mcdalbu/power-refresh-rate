@@ -11,6 +11,8 @@ import time
 
 LOG = logging.getLogger('power-profile-cpu-cap')
 CPUFREQ = Path('/sys/devices/system/cpu/cpufreq')
+CPUROOT = Path('/sys/devices/system/cpu')
+PARK_STATE = Path('/run/power-profile-cpu-cap/parked-cpus.json')
 POWER = 'org.freedesktop.UPower.PowerProfiles'
 POWER_PATH = '/org/freedesktop/UPower/PowerProfiles'
 
@@ -105,6 +107,94 @@ class CpuLimits:
         return changed, len(plan)
 
 
+class CoreParking:
+    """Offline secondary P-cores; persist ownership for crash/stop recovery."""
+    def __init__(self, root=CPUROOT, state=PARK_STATE, types=None):
+        self.root, self.state = root, state
+        self.get_types = types or CpuLimits().types
+        self.p_cores = None
+
+    def managed(self):
+        try:
+            ids = json.loads(self.state.read_text())
+        except FileNotFoundError:
+            return set()
+        if not isinstance(ids, list) or any(type(i) is not int or not 1 <= i <= 65535 for i in ids):
+            raise RuntimeError('Invalid managed CPU recovery state')
+        return set(ids)
+
+    def save(self, ids):
+        self.state.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        temporary = self.state.with_suffix('.tmp')
+        temporary.write_text(json.dumps(sorted(ids)) + '\n')
+        temporary.chmod(0o600)
+        os.replace(temporary, self.state)
+
+    def restore(self):
+        remaining = self.managed()
+        restored, errors = [], []
+        for cpu in sorted(remaining.copy()):
+            path = self.root / f'cpu{cpu}/online'
+            try:
+                if path.exists():
+                    if path.read_text().strip() == '0':
+                        path.write_text('1')
+                        restored.append(cpu)
+                    if path.read_text().strip() != '1':
+                        raise RuntimeError('kernel did not confirm online')
+                remaining.remove(cpu)
+                self.save(remaining)
+            except (OSError, RuntimeError) as error:
+                errors.append(f'CPU {cpu}: {error}')
+        if restored:
+            LOG.info('Restored managed P-cores: %s', restored)
+        if errors:
+            raise RuntimeError('Could not restore managed CPUs: ' + '; '.join(errors))
+        return restored
+
+    def park(self):
+        if self.p_cores is None:
+            p, e = self.get_types()
+            if not p or not e or p & e:
+                raise RuntimeError('Cannot identify disjoint P-core/E-core lists')
+            if not any((self.root / f'cpu{i}/online').exists() and
+                       (self.root / f'cpu{i}/online').read_text().strip() == '1' for i in e):
+                raise RuntimeError('P-core parking requires an online E-core')
+            self.p_cores = set(p) - {0}
+        owned, changed = self.managed(), []
+        try:
+            for cpu in sorted(self.p_cores):
+                path = self.root / f'cpu{cpu}/online'
+                if not path.exists() or path.read_text().strip() != '1':
+                    continue  # Never take ownership of a CPU already offline.
+                owned.add(cpu)
+                self.save(owned)  # Record ownership BEFORE the kernel write.
+                path.write_text('0')
+                if path.read_text().strip() != '0':
+                    raise RuntimeError(f'CPU {cpu}: kernel did not confirm offline')
+                changed.append(cpu)
+        except (OSError, RuntimeError):
+            self.restore()
+            raise
+        if changed:
+            LOG.info('Economy: parked secondary P-cores %s; CPU 0 and E-cores retained', changed)
+        return changed
+
+
+def parking_unit(unit, p_cores, root=CPUROOT):
+    """Add only the hotplug files needed on the installation's own hardware."""
+    start, end = '# BEGIN managed P-core parking', '# END managed P-core parking'
+    unit = re.sub(re.escape(start) + r'.*?' + re.escape(end) + r'\n?', '', unit, flags=re.S)
+    paths = [f'ReadWritePaths=-{root}/cpu{i}/online' for i in sorted(p_cores - {0})
+             if (root / f'cpu{i}/online').exists()]
+    block = '\n'.join([start, 'RuntimeDirectory=power-profile-cpu-cap',
+                       'RuntimeDirectoryMode=0700', 'RuntimeDirectoryPreserve=restart',
+                       *paths, end, ''])
+    if unit.count('[Service]') != 1:
+        raise ValueError('Expected one systemd Service section')
+    return unit.replace('[Service]\n', '[Service]\n' + block, 1)
+
+
 class XeGpuPolicy:
     def __init__(self, root=Path('/sys/bus/pci/drivers/xe')):
         self.root = root
@@ -137,7 +227,7 @@ class XeGpuPolicy:
 
 
 class ProfileWatcher:
-    def __init__(self, limits, gpu=None, settings_path=None):
+    def __init__(self, limits, gpu=None, settings_path=None, parking=None):
         import gi
         gi.require_version('Gio', '2.0')
         gi.require_version('GLibUnix', '2.0')
@@ -145,6 +235,7 @@ class ProfileWatcher:
         self.Gio, self.GLib, self.GLibUnix = Gio, GLib, GLibUnix
         self.limits = limits
         self.gpu = gpu
+        self.parking = parking
         self.settings = json.loads(settings_path.read_text()) if settings_path else None
         self.last_gpu_error = None
         self.loop = GLib.MainLoop()
@@ -201,7 +292,14 @@ class ProfileWatcher:
                 on_battery = battery.unpack()
                 hardware = self.settings[profile]['battery' if on_battery else 'ac']
             caps = (hardware['p_max_mhz'] * 1000, hardware['e_max_mhz'] * 1000) if hardware else None
+            park = hardware.get('park_p_cores', False) if hardware else False
+            if type(park) is not bool or (park and profile != 'power-saver'):
+                raise ValueError('P-core parking is a boolean restricted to Economy')
+            if self.parking is not None and not park:
+                self.parking.restore()  # Restore before applying caps to returning CPUs.
             changed, count = self.limits.apply(profile, caps)
+            if self.parking is not None and park:
+                self.parking.park()  # Apply all caps before taking CPUs offline.
             context = (profile, on_battery)
             if changed or self.last_state != context:
                 rule = (f'P-cores <= {self.limits.cap_khz} kHz, E-cores <= '
@@ -269,13 +367,15 @@ def main():
         parser.error('System CPU limits require administrative privileges')
     limits = CpuLimits(cap_khz=args.max_khz, efficiency_cap_khz=args.efficiency_max_khz)
     gpu = XeGpuPolicy() if args.xe_gpu_policy else None
+    parking = CoreParking()
+    parking.restore()  # Recover CPUs owned by a previous process, including --restore.
     if args.restore:
         changed, count = limits.apply('balanced')
         LOG.info('Restored hardware maxima on %d policies (%d updated)', count, len(changed))
         if gpu is not None:
             gpu.apply('balanced')
     else:
-        ProfileWatcher(limits, gpu, args.settings_file).run()
+        ProfileWatcher(limits, gpu, args.settings_file, parking).run()
 
 
 if __name__ == '__main__':

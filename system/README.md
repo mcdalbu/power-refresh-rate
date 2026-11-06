@@ -15,7 +15,7 @@ Cada perfil tem seções separadas para tomada/bateria:
 - tela 60/120 Hz, salva por usuário na extensão;
 - em Desempenho, EPP dinâmico ou EPP 0 fixo por fonte de alimentação.
 
-Economia e Balanceado continuam usando LPMD automático. Turbo, topologia,
+Economia e Balanceado continuam usando LPMD automático. Turbo,
 limiares WLT, firmware e escala do monitor não são controles deste editor.
 Os valores existentes são carregados ao abrir as preferências. Alterações
 CPU/EPP/GPU só são aplicadas pelo botão da página Geral; mudanças de frequência
@@ -117,3 +117,30 @@ até a primeira edição de uma frequência separada por tomada/bateria.
 
 Referências: [polkit/pkexec](https://polkit.pages.freedesktop.org/polkit/pkexec.1.html)
 e [preferências de extensões GNOME](https://gjs.guide/extensions/development/preferences.html).
+
+## Atualizar um complemento já instalado
+
+```sh
+sudo /usr/bin/python3 -I system/update-backend.py
+```
+
+O atualizador preserva os arquivos JSON EPP/hardware byte a byte, guarda backup
+e atualiza o controlador, o helper e as permissões da unidade existente.
+A opção `park_p_cores` é um booleano opcional por fonte no perfil `power-saver`;
+a ausência equivale a `false`. O helper rejeita ativação nos outros perfis.
+
+O controlador mantém CPU 0 e E-cores, aplica os tetos antes de desativar os
+P-cores secundários e restaura os núcleos antes de reaplicar tetos de outro
+perfil. O estado de recuperação fica em
+`/run/power-profile-cpu-cap/parked-cpus.json`, de acesso restrito ao root.
+O processo de parada e a inicialização recuperam apenas CPUs registradas como
+gerenciadas; CPUs que já estavam offline não são assumidas.
+
+Para reverter somente esta atualização, pare `power-profile-cpu-cap.service`
+primeiro (o hook de parada restaura os núcleos). Restaure os três arquivos
+`power-profile-cpu-cap.py`, `power-profile-settings-helper` e
+`power-profile-cpu-cap.service` do backup impresso pelo atualizador. Se a
+opção foi salva, remova apenas `park_p_cores` das entradas do JSON de hardware
+antes de usar o helper antigo. Execute `restorecon` nos três arquivos,
+`systemctl daemon-reload` e inicie o serviço. Os demais valores de energia
+permanecem nos JSON existentes.

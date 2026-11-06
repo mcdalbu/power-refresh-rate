@@ -60,6 +60,13 @@ save.emit('clicked');
 if (applyCalls !== 0)
     throw new Error('Unchanged settings requested authentication');
 // Changing a workload value must reach the single explicit save operation.
+const parkingRows = all.filter(w => w instanceof Adw.SwitchRow && w.title === 'Desativar P-cores secundários');
+if (parkingRows.length !== 2 || parkingRows.some(row => row.active))
+    throw new Error('Parking must be opt-in and limited to the two Economy contexts');
+parkingRows[1].active = true;
+if (window._powerProfileDraft.hardware['power-saver'].battery.park_p_cores !== true ||
+    window._powerProfileDraft.hardware['power-saver'].ac.park_p_cores === true)
+    throw new Error('Parking switch did not preserve independent AC/battery settings');
 window._powerProfileDraft.epp.balanced.battery[0] = 209;
 GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
     save.emit('clicked');
@@ -73,6 +80,8 @@ if (!save.sensitive)
     throw new Error('Apply did not finish or editors stayed disabled');
 if (applied?.epp.balanced.battery[0] !== 209)
     throw new Error('Preferences did not apply the edited configuration');
+if (applied.hardware['power-saver'].battery.park_p_cores !== true)
+    throw new Error('Parking option was lost in the privileged-helper payload');
 if (applyCalls !== 1)
     throw new Error('Apply called more than once');
 preferences._applySystem = async () => { throw new Error('Authentication cancelled'); };
@@ -82,6 +91,8 @@ await new Promise(resolve => GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => 
 if (!save.sensitive || applyCalls !== 1)
     throw new Error('Cancelled authentication did not recover safely');
 print('System editor: explicit save, no-op, workload payload and cancelled-auth recovery verified');
+window.set_visible_page_name('power-saver');
+await new Promise(resolve => GLib.timeout_add(GLib.PRIORITY_DEFAULT, 200, () => { resolve(); return GLib.SOURCE_REMOVE; }));
 const snapshot = new Gtk.Snapshot();
 Gtk.WidgetPaintable.new(window).snapshot(snapshot, window.get_width(), window.get_height());
 const node = snapshot.to_node();

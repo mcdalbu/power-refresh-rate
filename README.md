@@ -1,6 +1,6 @@
 # Power Profiles & Refresh Rate
 
-Extensão para GNOME Shell 50 com um editor de perfis de energia e controle
+Extensão para GNOME Shell 50 e 51 com um editor de perfis de energia e controle
 da frequência do painel interno. Cada perfil tem ajustes separados para
 tomada e bateria.
 
@@ -16,7 +16,7 @@ dos monitores externos. Usa sinais D-Bus e dispensa um serviço Python permanent
 
 ## Requisitos
 
-- GNOME Shell 50 em Wayland.
+- GNOME Shell 50 ou 51 em Wayland.
 - Um serviço compatível com a API `org.freedesktop.UPower.PowerProfiles`, como
   `power-profiles-daemon`.
 - Painel interno com modos de 60 e 120 Hz na resolução e configuração de VRR
@@ -177,3 +177,48 @@ nomes são rótulos da interface; o kernel continua recebendo o EPP numérico.
 
 Os estados EPP agora usam um seletor com número e nome na opção selecionada.
 Escolha Custom value… para editar qualquer inteiro sem arredondamento.
+
+## GNOME Shell 51
+
+A versão 5 declara suporte ao GNOME Shell 50 e 51. Em 03/11/2026, os testes de política e controlador D-Bus e a integração em sessão virtual passaram com GNOME Shell 51.1 e Mutter 51.1 (Fedora 45), incluindo ativação, desativação, reativação e preferências GTK/Adwaita.
+
+Após instalar o pacote sobre uma sessão aberta, saia e entre na sessão para carregar os metadados novos. A sessão pode continuar mostrando a versão anterior e “OUT OF DATE” até o próximo login. No GNOME Shell 51.1, o método D-Bus `ReloadExtension` está desativado (`NotSupported`); desativar e ativar a extensão não substitui esse novo login.
+
+## P-cores secundários no modo Economia (versão 6)
+
+Em **Economia → Na tomada / Na bateria → Desativar P-cores secundários**,
+selecione a política separadamente por fonte de alimentação e use
+**Geral → Aplicar ajustes**. A opção começa desmarcada. O CPU 0 permanece
+ativo; somente P-cores com controle de hotplug são colocados offline. Todos
+os E-cores permanecem disponíveis. No Core Ultra 7 256V testado, isso deixa
+**1 P-core + 4 E-cores**, desativando CPUs 1–3.
+
+Os núcleos gerenciados voltam ao desmarcar a opção, selecionar Balanceado ou
+Desempenho, trocar para uma fonte onde a opção esteja desmarcada ou parar o
+controlador. O serviço registra os núcleos que ele desativou para recuperá-los
+em reinícios/falhas, sem reativar CPUs previamente desligadas por outro gestor.
+Desativar a extensão de tela não para esse serviço de sistema: desmarque a
+opção e aplique para restaurar os P-cores pela interface. O limite MHz de
+P-cores continua valendo para o CPU 0 e para P-cores que permaneçam online.
+
+Atualize primeiro o complemento existente, preservando seus JSON atuais:
+
+```sh
+sudo /usr/bin/python3 -I system/update-backend.py
+make install
+```
+
+O atualizador guarda backup em `/var/backups/energy-trial/p-core-parking-*`,
+instala o controlador e o helper e concede à unidade systemd acesso apenas
+aos arquivos `online` dos P-cores secundários presentes nesta máquina.
+Veja [system/README.md](system/README.md) para instalação inicial e reversão.
+
+Validação em 06/11/2026: 24 testes de backend, testes D-Bus e preferências
+GTK em sessão GNOME isolada, incluindo campos independentes tomada/bateria,
+restauração após falha e recuperação dos núcleos gerenciados.
+
+![Opção de P-cores secundários nas preferências](docs/core-parking-preferences.png)
+
+O teste real no Core Ultra 7 256V confirmou CPUs 1–3 offline e posterior
+restauração de CPUs 0–7, inclusive dentro do namespace de montagem restrito
+da unidade systemd. Turbo e os dois arquivos de configuração foram preservados.

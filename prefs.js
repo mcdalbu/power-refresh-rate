@@ -213,6 +213,13 @@ export default class PowerRefreshPreferences extends ExtensionPreferences {
                     continue;
                 editors.push(system);
                 const hardware = draft.hardware[profile][source];
+                if (profile === 'power-saver') {
+                    const parking = new Adw.SwitchRow({title: 'Desativar P-cores secundários',
+                        subtitle: 'Mantém CPU 0 e E-cores ativos. Restaura os demais P-cores ao sair de Economia ou desativar esta opção.',
+                        active: hardware.park_p_cores ?? false});
+                    parking.connect('notify::active', () => {hardware.park_p_cores = parking.active;});
+                    system.add(parking);
+                }
                 for (const [keyName, label] of [['p_max_mhz', 'Limite dos P-cores (MHz)'], ['e_max_mhz', 'Limite dos E-cores (MHz)']]) {
                     const row = spin(label, hardware[keyName], 10000, '0 = máximo do hardware. O complemento valida os limites aceitos nesta CPU.', 100);
                     row.connect('notify::value', () => {hardware[keyName] = Math.round(row.value);});

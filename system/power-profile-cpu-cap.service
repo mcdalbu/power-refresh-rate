@@ -7,6 +7,14 @@ Wants=power-profiles-daemon.service upower.service
 After=dbus.service
 
 [Service]
+# BEGIN managed P-core parking
+RuntimeDirectory=power-profile-cpu-cap
+RuntimeDirectoryMode=0700
+RuntimeDirectoryPreserve=restart
+ReadWritePaths=-/sys/devices/system/cpu/cpu1/online
+ReadWritePaths=-/sys/devices/system/cpu/cpu2/online
+ReadWritePaths=-/sys/devices/system/cpu/cpu3/online
+# END managed P-core parking
 Type=simple
 ExecStart=/usr/bin/python3 -I /usr/local/libexec/power-profile-cpu-cap.py --max-khz 3000000 --efficiency-max-khz 2000000 --xe-gpu-policy --settings-file /etc/power-profile-cpu-cap/config.json
 ExecStopPost=/usr/bin/python3 -I /usr/local/libexec/power-profile-cpu-cap.py --restore --xe-gpu-policy
